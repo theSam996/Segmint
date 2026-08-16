@@ -1,11 +1,13 @@
 """
 Segmint — Pipeline Runner (Orchestrator)
 Executes all 6 stages of the RFM segmentation pipeline in sequence.
+Supports both Demo dataset and Custom uploaded datasets.
 """
 
 import os
 import time
 from datetime import datetime
+from typing import Optional, Dict
 
 from .download import download_dataset
 from .clean import run_cleaning
@@ -31,6 +33,7 @@ pipeline_state = {
     "duration": None,
     "error": None,
     "results": None,
+    "source": "demo",
 }
 
 
@@ -39,11 +42,11 @@ def get_pipeline_status() -> dict:
     return pipeline_state.copy()
 
 
-def run_pipeline() -> dict:
+def run_pipeline(custom_file_path: Optional[str] = None, column_mapping: Optional[Dict] = None) -> dict:
     """
     Execute the full Segmint pipeline:
-      Stage 0: Download dataset
-      Stage 1: Clean data
+      Stage 0: Ingest dataset (Demo download or Custom Upload)
+      Stage 1: Clean data with column mappings
       Stage 2: Compute RFM
       Stage 3: Preprocess (scale)
       Stage 4: Cluster (K-Means + DBSCAN)
@@ -55,6 +58,8 @@ def run_pipeline() -> dict:
     """
     global pipeline_state
 
+    source_type = "custom" if custom_file_path else "demo"
+
     pipeline_state.update({
         "status": "running",
         "current_stage": "initializing",
@@ -64,23 +69,28 @@ def run_pipeline() -> dict:
         "duration": None,
         "error": None,
         "results": None,
+        "source": source_type,
     })
 
     overall_start = time.time()
-    results = {"stages": {}}
+    results = {"stages": {}, "source": source_type}
 
     try:
         # ============================================================
-        # Stage 0: Download dataset
+        # Stage 0: Dataset Ingestion / Download
         # ============================================================
         pipeline_state["current_stage"] = "downloading"
         pipeline_state["progress"] = 5
         print("\n" + "=" * 60)
-        print("STAGE 0: Downloading Dataset")
+        if custom_file_path:
+            print("STAGE 0: Ingesting Custom Dataset")
+            raw_file = custom_file_path
+            results["stages"]["download"] = {"file_path": raw_file, "type": "custom_upload"}
+        else:
+            print("STAGE 0: Ingesting Demo Dataset")
+            raw_file = download_dataset(os.path.join(RAW_DIR, "online_retail.xlsx"))
+            results["stages"]["download"] = {"file_path": raw_file, "type": "demo"}
         print("=" * 60)
-
-        raw_file = download_dataset(os.path.join(RAW_DIR, "online_retail.xlsx"))
-        results["stages"]["download"] = {"file_path": raw_file}
 
         # ============================================================
         # Stage 1: Clean data
@@ -91,7 +101,7 @@ def run_pipeline() -> dict:
         print("STAGE 1: Data Cleaning")
         print("=" * 60)
 
-        clean_result = run_cleaning(raw_file, PROCESSED_DIR)
+        clean_result = run_cleaning(raw_file, PROCESSED_DIR, column_mapping=column_mapping)
         results["stages"]["cleaning"] = clean_result["stats"]
 
         # ============================================================
@@ -162,12 +172,12 @@ def run_pipeline() -> dict:
         }
 
         # ============================================================
-        # Stage 6: Business Labeling
+        # Stage 6: Business Labeling & Recommendations
         # ============================================================
         pipeline_state["current_stage"] = "labeling"
         pipeline_state["progress"] = 90
         print("\n" + "=" * 60)
-        print("STAGE 6: Business Labeling")
+        print("STAGE 6: Business Labeling & Recommendations")
         print("=" * 60)
 
         label_result = run_labeling(
@@ -180,6 +190,15 @@ def run_pipeline() -> dict:
             "cluster_count": len(label_result["persona_map"]),
         }
 
+        # Invalidate API caches
+        try:
+            from ..api.routes.customers import invalidate_cache as inv_cust
+            from ..api.routes.clusters import invalidate_cache as inv_clust
+            inv_cust()
+            inv_clust()
+        except Exception:
+            pass
+
         # ============================================================
         # Complete
         # ============================================================
@@ -190,6 +209,7 @@ def run_pipeline() -> dict:
             "clusters_found": int(cluster_result["kmeans_result"]["k"]),
             "pipeline_duration_seconds": duration,
             "data_date_range": f"{clean_result['stats']['date_range_start']} → {clean_result['stats']['date_range_end']}",
+            "source": source_type,
         }
 
         pipeline_state.update({
@@ -199,10 +219,12 @@ def run_pipeline() -> dict:
             "end_time": datetime.now().isoformat(),
             "duration": duration,
             "results": results,
+            "source": source_type,
         })
 
         print("\n" + "=" * 60)
         print(f"✅ PIPELINE COMPLETE in {duration:.1f}s")
+        print(f"   Source: {source_type}")
         print(f"   Customers: {results['summary']['total_customers']:,}")
         print(f"   Clusters: {results['summary']['clusters_found']}")
         print("=" * 60)

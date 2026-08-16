@@ -1,9 +1,10 @@
 /**
- * Segmint — Dashboard Page
- * Overview of customer segments with PCA scatter plot, metrics, and cluster summary.
+ * Segmint — Executive Dashboard Page
+ * High-level overview of customer segments with PCA scatter plot, metrics, segment breakdown, and quick navigation.
  */
 
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import MetricCard from '../components/Dashboard/MetricCard';
 import ClusterChart from '../components/Dashboard/ClusterChart';
 import ClusterSummaryTable from '../components/Dashboard/ClusterSummaryTable';
@@ -12,6 +13,7 @@ import { getClusterSummary, getPCAData, getDistribution } from '../api/client';
 import { formatNumber, formatCurrency, formatDays } from '../utils/formatters';
 
 export default function DashboardPage() {
+  const navigate = useNavigate();
   const [summary, setSummary] = useState(null);
   const [pcaData, setPcaData] = useState(null);
   const [distData, setDistData] = useState(null);
@@ -55,7 +57,6 @@ export default function DashboardPage() {
     }
   };
 
-  // Compute metrics from summary
   const totalCustomers = summary?.total_customers || 0;
   const clusterCount = summary?.clusters?.length || 0;
   const avgMonetary = summary?.clusters?.length
@@ -70,7 +71,7 @@ export default function DashboardPage() {
       <div className="main-content">
         <div className="page-header">
           <h2>Dashboard</h2>
-          <p>Loading analytics...</p>
+          <p>Loading intelligence data...</p>
         </div>
         <div className="flex-center" style={{ minHeight: '400px' }}>
           <div className="spinner spinner-lg"></div>
@@ -79,20 +80,20 @@ export default function DashboardPage() {
     );
   }
 
-  if (error) {
+  if (error || !summary?.clusters?.length) {
     return (
       <div className="main-content">
         <div className="page-header">
           <h2>Dashboard</h2>
-          <p>Cluster overview & segment analysis</p>
+          <p>Cluster overview & segment intelligence</p>
         </div>
         <div className="card">
           <div className="empty-state">
             <div className="empty-state-icon">🔬</div>
-            <h3>No Data Available</h3>
-            <p>{error}</p>
-            <button className="btn btn-primary mt-4" onClick={() => window.location.href = '/pipeline'}>
-              Go to Pipeline →
+            <h3>No Active Data Ingested</h3>
+            <p>{error || 'Please run the pipeline or upload your dataset to view the dashboard.'}</p>
+            <button className="btn btn-primary mt-4" onClick={() => navigate('/setup')}>
+              Go to Setup & Upload →
             </button>
           </div>
         </div>
@@ -102,55 +103,119 @@ export default function DashboardPage() {
 
   return (
     <div className="main-content">
+      {/* Header */}
       <div className="page-header">
-        <h2>Dashboard</h2>
-        <p>Customer segmentation overview powered by RFM analysis</p>
+        <div>
+          <h2>Executive Intelligence Dashboard</h2>
+          <p>Unsupervised customer segmentation overview powered by RFM behavioral modeling.</p>
+        </div>
+        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+          <button className="btn btn-secondary btn-sm" onClick={() => navigate('/setup')}>
+            ⚙️ Setup & Ingestion
+          </button>
+          <button className="btn btn-primary btn-sm" onClick={() => navigate('/segments')}>
+            🎯 View Segment Playbooks →
+          </button>
+        </div>
       </div>
 
       {/* Metrics Row */}
       <div className="metrics-grid animate-in">
         <MetricCard
           icon="👥"
-          label="Total Customers"
+          label="Segmented Customers"
           value={formatNumber(totalCustomers)}
-          sub="Segmented customers"
+          sub="100% database coverage"
         />
         <MetricCard
           icon="🎯"
-          label="Segments Found"
+          label="Active Personas"
           value={clusterCount}
-          sub="K-Means clusters"
+          sub="K-Means optimal clusters"
           color="linear-gradient(135deg, #7c3aed, #3b82f6)"
         />
         <MetricCard
           icon="💰"
-          label="Avg Monetary"
+          label="Average Spend"
           value={formatCurrency(avgMonetary)}
-          sub="Per customer"
+          sub="Per customer lifetime"
           color="linear-gradient(135deg, #10b981, #06b6d4)"
         />
         <MetricCard
           icon="📅"
-          label="Avg Recency"
+          label="Average Recency"
           value={formatDays(avgRecency)}
           sub="Since last purchase"
           color="linear-gradient(135deg, #f59e0b, #ef4444)"
         />
       </div>
 
+      {/* Quick Nav Bar */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+        gap: 'var(--space-3)',
+        marginBottom: 'var(--space-6)',
+      }}>
+        <div
+          className="card"
+          style={{ padding: 'var(--space-4)', cursor: 'pointer', borderColor: 'rgba(124, 58, 237, 0.3)' }}
+          onClick={() => navigate('/segments')}
+        >
+          <div style={{ fontSize: '1.25rem', marginBottom: '4px' }}>🎯</div>
+          <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700 }}>Segments & Playbooks</div>
+          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>Action playbooks per persona →</div>
+        </div>
+
+        <div
+          className="card"
+          style={{ padding: 'var(--space-4)', cursor: 'pointer', borderColor: 'rgba(59, 130, 246, 0.3)' }}
+          onClick={() => navigate('/customers')}
+        >
+          <div style={{ fontSize: '1.25rem', marginBottom: '4px' }}>👥</div>
+          <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700 }}>Customer Search</div>
+          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>Lookup & inspect {formatNumber(totalCustomers)} accounts →</div>
+        </div>
+
+        <div
+          className="card"
+          style={{ padding: 'var(--space-4)', cursor: 'pointer', borderColor: 'rgba(16, 185, 129, 0.3)' }}
+          onClick={() => navigate('/analytics')}
+        >
+          <div style={{ fontSize: '1.25rem', marginBottom: '4px' }}>📈</div>
+          <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700 }}>Deep Analytics</div>
+          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>Revenue disparity & RFM curves →</div>
+        </div>
+
+        <div
+          className="card"
+          style={{ padding: 'var(--space-4)', cursor: 'pointer', borderColor: 'rgba(245, 158, 11, 0.3)' }}
+          onClick={() => navigate('/comparison')}
+        >
+          <div style={{ fontSize: '1.25rem', marginBottom: '4px' }}>⚖️</div>
+          <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700 }}>Model Comparison</div>
+          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>K-Means vs DBSCAN noise check →</div>
+        </div>
+      </div>
+
       {/* Charts Grid */}
-      <div className="charts-grid">
+      <div className="charts-grid animate-in">
         {/* PCA Scatter Plot */}
         <div className="card full-width">
           <div className="card-header">
-            <h3>Customer Segments — PCA Projection</h3>
+            <div>
+              <h3>Customer Segments — 2D PCA Space Projection</h3>
+              <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: '2px' }}>
+                93.7% variance preserved from 3D scaled RFM feature space. Hover over points for customer IDs.
+              </p>
+            </div>
             <div className="select-wrapper">
               <select
                 value={algorithm}
                 onChange={(e) => setAlgorithm(e.target.value)}
               >
-                <option value="kmeans">K-Means</option>
-                <option value="dbscan">DBSCAN</option>
+                <option value="kmeans">Algorithm: K-Means (Spherical)</option>
+                <option value="dbscan">Algorithm: DBSCAN (Density + Noise)</option>
               </select>
             </div>
           </div>
@@ -162,15 +227,15 @@ export default function DashboardPage() {
         {/* RFM Distribution */}
         <div className="card">
           <div className="card-header">
-            <h3>RFM Distribution</h3>
+            <h3>RFM Metric Density</h3>
             <div className="select-wrapper">
               <select
                 value={distMetric}
                 onChange={(e) => setDistMetric(e.target.value)}
               >
-                <option value="monetary">Monetary</option>
-                <option value="frequency">Frequency</option>
-                <option value="recency">Recency</option>
+                <option value="monetary">Monetary (£)</option>
+                <option value="frequency">Frequency (Orders)</option>
+                <option value="recency">Recency (Days)</option>
               </select>
             </div>
           </div>
@@ -182,7 +247,10 @@ export default function DashboardPage() {
         {/* Cluster Breakdown */}
         <div className="card">
           <div className="card-header">
-            <h3>Segment Breakdown</h3>
+            <h3>Persona Cohort Breakdown</h3>
+            <button className="btn btn-secondary btn-sm" onClick={() => navigate('/segments')}>
+              Details →
+            </button>
           </div>
           <div className="card-body" style={{ padding: 0 }}>
             {summary?.clusters?.map((c) => (
@@ -192,24 +260,26 @@ export default function DashboardPage() {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  padding: '12px 20px',
+                  padding: '14px 20px',
                   borderBottom: '1px solid var(--border-color)',
+                  cursor: 'pointer',
                 }}
+                onClick={() => navigate('/segments')}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <span style={{ fontSize: '1.2rem' }}>{c.icon}</span>
+                  <span style={{ fontSize: '1.3rem' }}>{c.icon}</span>
                   <div>
-                    <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: c.color }}>
+                    <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: c.color }}>
                       {c.persona}
                     </div>
                     <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>
-                      {formatNumber(c.customer_count)} customers
+                      {formatNumber(c.customer_count)} accounts · avg spend {formatCurrency(c.avg_monetary)}
                     </div>
                   </div>
                 </div>
                 <div style={{
-                  fontSize: 'var(--text-sm)',
-                  fontWeight: 700,
+                  fontSize: 'var(--text-base)',
+                  fontWeight: 800,
                   color: 'var(--text-primary)',
                 }}>
                   {c.pct_of_base.toFixed(1)}%
@@ -221,9 +291,12 @@ export default function DashboardPage() {
       </div>
 
       {/* Cluster Summary Table */}
-      <div className="card">
+      <div className="card animate-in">
         <div className="card-header">
-          <h3>Segment Details & Recommended Actions</h3>
+          <h3>Segment Details & Recommended Action Strategies</h3>
+          <button className="btn btn-secondary btn-sm" onClick={() => navigate('/segments')}>
+            Full Playbooks →
+          </button>
         </div>
         <div className="card-body" style={{ padding: 0 }}>
           <ClusterSummaryTable clusters={summary?.clusters} />

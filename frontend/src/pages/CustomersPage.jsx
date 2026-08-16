@@ -1,18 +1,25 @@
 /**
  * Segmint — Customers Page
- * Search, browse, and inspect individual customer segments.
+ * Search, filter by persona, browse, and inspect individual customer accounts.
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { getCustomers, getCustomer } from '../api/client';
+import { useSearchParams, useNavigate } from 'react-router-dom';
+import { getCustomers, getCustomer, getClusterSummary } from '../api/client';
 import { formatCurrency, formatNumber, formatDays } from '../utils/formatters';
 
 export default function CustomersPage() {
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialPersona = searchParams.get('persona') || '';
+
   const [customers, setCustomers] = useState([]);
+  const [summary, setSummary] = useState(null);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [search, setSearch] = useState('');
+  const [selectedPersona, setSelectedPersona] = useState(initialPersona);
   const [sortBy, setSortBy] = useState('monetary');
   const [sortOrder, setSortOrder] = useState('desc');
   const [selectedCustomer, setSelectedCustomer] = useState(null);
@@ -20,11 +27,16 @@ export default function CustomersPage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  useEffect(() => {
+    getClusterSummary().then(res => setSummary(res.data)).catch(() => {});
+  }, []);
+
   const loadCustomers = useCallback(async () => {
     setLoading(true);
     try {
       const params = { page, page_size: 30, sort_by: sortBy, sort_order: sortOrder };
       if (search) params.search = search;
+      if (selectedPersona) params.persona = selectedPersona;
       const res = await getCustomers(params);
       setCustomers(res.data.customers);
       setTotal(res.data.total);
@@ -34,12 +46,22 @@ export default function CustomersPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, sortBy, sortOrder]);
+  }, [page, search, selectedPersona, sortBy, sortOrder]);
 
   useEffect(() => {
     const timer = setTimeout(loadCustomers, search ? 300 : 0);
     return () => clearTimeout(timer);
   }, [loadCustomers]);
+
+  const handlePersonaFilter = (persona) => {
+    setSelectedPersona(persona);
+    setPage(1);
+    if (persona) {
+      setSearchParams({ persona });
+    } else {
+      setSearchParams({});
+    }
+  };
 
   const selectCustomer = async (customerId) => {
     setDetailLoading(true);
@@ -80,8 +102,8 @@ export default function CustomersPage() {
             <div className="empty-state-icon">👥</div>
             <h3>No Customer Data</h3>
             <p>{error}</p>
-            <button className="btn btn-primary mt-4" onClick={() => window.location.href = '/pipeline'}>
-              Go to Pipeline →
+            <button className="btn btn-primary mt-4" onClick={() => navigate('/setup')}>
+              Go to Setup & Pipeline →
             </button>
           </div>
         </div>
@@ -92,9 +114,36 @@ export default function CustomersPage() {
   return (
     <div className="main-content">
       <div className="page-header">
-        <h2>Customers</h2>
-        <p>Browse and search {formatNumber(total)} segmented customers</p>
+        <div>
+          <h2>Customer Account Intelligence</h2>
+          <p>Search, filter, and inspect individual customer RFM metrics and assigned business personas.</p>
+        </div>
+        <button className="btn btn-secondary btn-sm" onClick={() => navigate('/segments')}>
+          🎯 View Persona Playbooks →
+        </button>
       </div>
+
+      {/* Segment Filter Badges */}
+      {summary?.clusters?.length > 0 && (
+        <div style={{ display: 'flex', gap: 'var(--space-2)', marginBottom: 'var(--space-4)', flexWrap: 'wrap' }}>
+          <button
+            className={`btn ${!selectedPersona ? 'btn-primary' : 'btn-secondary'} btn-sm`}
+            onClick={() => handlePersonaFilter('')}
+          >
+            All Customers ({formatNumber(summary.total_customers)})
+          </button>
+          {summary.clusters.map((c) => (
+            <button
+              key={c.cluster_id}
+              className={`btn ${selectedPersona === c.persona ? 'btn-primary' : 'btn-secondary'} btn-sm`}
+              onClick={() => handlePersonaFilter(selectedPersona === c.persona ? '' : c.persona)}
+              style={selectedPersona === c.persona ? { background: c.color, borderColor: c.color } : {}}
+            >
+              <span>{c.icon}</span> {c.persona} ({formatNumber(c.customer_count)})
+            </button>
+          ))}
+        </div>
+      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: selectedCustomer ? '1fr 380px' : '1fr', gap: 'var(--space-6)' }}>
         {/* Customer Table */}
@@ -118,7 +167,7 @@ export default function CustomersPage() {
               )}
             </div>
             <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>
-              {formatNumber(total)} results
+              {formatNumber(total)} accounts found
             </span>
           </div>
 
@@ -132,9 +181,9 @@ export default function CustomersPage() {
                 <thead>
                   <tr>
                     <th onClick={() => handleSort('customer_id')} style={{ cursor: 'pointer' }}>
-                      ID <SortIcon field="customer_id" />
+                      Customer ID <SortIcon field="customer_id" />
                     </th>
-                    <th>Segment</th>
+                    <th>Assigned Persona</th>
                     <th onClick={() => handleSort('recency')} style={{ cursor: 'pointer' }}>
                       Recency <SortIcon field="recency" />
                     </th>
@@ -142,7 +191,7 @@ export default function CustomersPage() {
                       Frequency <SortIcon field="frequency" />
                     </th>
                     <th onClick={() => handleSort('monetary')} style={{ cursor: 'pointer' }}>
-                      Monetary <SortIcon field="monetary" />
+                      Monetary (£) <SortIcon field="monetary" />
                     </th>
                   </tr>
                 </thead>
@@ -154,11 +203,11 @@ export default function CustomersPage() {
                       style={{
                         cursor: 'pointer',
                         background: selectedCustomer?.customer_id === c.customer_id
-                          ? 'rgba(124, 58, 237, 0.08)' : undefined,
+                          ? 'rgba(124, 58, 237, 0.12)' : undefined,
                       }}
                     >
-                      <td style={{ fontWeight: 600, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
-                        {c.customer_id}
+                      <td style={{ fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
+                        #{c.customer_id}
                       </td>
                       <td>
                         <span className="persona-tag">
@@ -167,8 +216,8 @@ export default function CustomersPage() {
                         </span>
                       </td>
                       <td>{formatDays(c.recency)}</td>
-                      <td>{formatNumber(c.frequency)}</td>
-                      <td style={{ color: 'var(--accent-emerald-light)', fontWeight: 600 }}>
+                      <td>{formatNumber(c.frequency)} orders</td>
+                      <td style={{ color: 'var(--accent-emerald-light)', fontWeight: 700 }}>
                         {formatCurrency(c.monetary)}
                       </td>
                     </tr>
@@ -183,7 +232,7 @@ export default function CustomersPage() {
             <div className="pagination">
               <button
                 disabled={page <= 1}
-                onClick={() => setPage(p => Math.max(1, p - 1))}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
               >
                 ← Prev
               </button>
@@ -210,7 +259,7 @@ export default function CustomersPage() {
               })}
               <button
                 disabled={page >= totalPages}
-                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               >
                 Next →
               </button>
@@ -218,7 +267,7 @@ export default function CustomersPage() {
           )}
         </div>
 
-        {/* Customer Detail Panel */}
+        {/* Customer Detail Drawer */}
         {selectedCustomer && (
           <div className="card" style={{ alignSelf: 'start', animation: 'slideInLeft 0.3s ease' }}>
             <div className="card-header">
@@ -239,7 +288,7 @@ export default function CustomersPage() {
               <div className="card-body">
                 {/* Persona Badge */}
                 <div style={{ textAlign: 'center', marginBottom: 'var(--space-6)' }}>
-                  <div style={{ fontSize: '2.5rem', marginBottom: 'var(--space-2)' }}>
+                  <div style={{ fontSize: '2.75rem', marginBottom: 'var(--space-2)' }}>
                     {selectedCustomer.persona_icon}
                   </div>
                   <span
@@ -247,7 +296,7 @@ export default function CustomersPage() {
                     style={{
                       background: `${selectedCustomer.persona_color}20`,
                       color: selectedCustomer.persona_color,
-                      borderColor: `${selectedCustomer.persona_color}40`,
+                      borderColor: `${selectedCustomer.persona_color}45`,
                       fontSize: 'var(--text-sm)',
                       padding: '6px 16px',
                     }}
@@ -256,65 +305,66 @@ export default function CustomersPage() {
                   </span>
                 </div>
 
-                {/* RFM Metrics */}
-                <div className="customer-detail">
-                  <div className="customer-rfm-metric card" style={{ background: 'rgba(245, 158, 11, 0.05)' }}>
+                {/* RFM Metrics Grid */}
+                <div className="customer-detail-grid">
+                  <div className="customer-rfm-metric">
                     <div className="rfm-label">Recency</div>
                     <div className="rfm-value" style={{ color: 'var(--accent-amber-light)' }}>
                       {Math.round(selectedCustomer.recency)}
                     </div>
-                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>days</div>
+                    <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>days ago</div>
                   </div>
-                  <div className="customer-rfm-metric card" style={{ background: 'rgba(59, 130, 246, 0.05)' }}>
+                  <div className="customer-rfm-metric">
                     <div className="rfm-label">Frequency</div>
                     <div className="rfm-value" style={{ color: 'var(--accent-blue-light)' }}>
                       {Math.round(selectedCustomer.frequency)}
                     </div>
-                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>orders</div>
+                    <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>orders</div>
                   </div>
-                  <div className="customer-rfm-metric card" style={{ background: 'rgba(16, 185, 129, 0.05)' }}>
+                  <div className="customer-rfm-metric">
                     <div className="rfm-label">Monetary</div>
                     <div className="rfm-value" style={{ color: 'var(--accent-emerald-light)' }}>
                       {formatCurrency(selectedCustomer.monetary)}
                     </div>
-                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>total spent</div>
+                    <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>spent</div>
                   </div>
                 </div>
 
-                {/* Recommended Action */}
+                {/* Next-Best-Action Recommendation */}
                 <div style={{
-                  marginTop: 'var(--space-6)',
+                  marginTop: 'var(--space-5)',
                   padding: 'var(--space-4)',
-                  background: 'rgba(124, 58, 237, 0.06)',
+                  background: 'rgba(124, 58, 237, 0.07)',
                   borderRadius: 'var(--radius-md)',
-                  border: '1px solid rgba(124, 58, 237, 0.12)',
+                  border: '1px solid rgba(124, 58, 237, 0.18)',
                 }}>
                   <div style={{
                     fontSize: 'var(--text-xs)',
                     color: 'var(--accent-purple-light)',
-                    fontWeight: 600,
+                    fontWeight: 700,
                     textTransform: 'uppercase',
                     letterSpacing: '0.08em',
                     marginBottom: 'var(--space-2)',
                   }}>
-                    💡 Recommended Action
+                    💡 Next-Best Action Playbook
                   </div>
                   <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
                     {selectedCustomer.action}
                   </div>
                 </div>
 
-                {/* Cluster Info */}
+                {/* Cluster Assignment Details */}
                 <div style={{
                   marginTop: 'var(--space-4)',
                   display: 'flex',
-                  gap: 'var(--space-3)',
+                  justifyContent: 'space-between',
                   fontSize: 'var(--text-xs)',
                   color: 'var(--text-muted)',
+                  borderTop: '1px solid var(--border-color)',
+                  paddingTop: 'var(--space-3)',
                 }}>
                   <span>K-Means: Cluster {selectedCustomer.kmeans_cluster}</span>
-                  <span>·</span>
-                  <span>DBSCAN: Cluster {selectedCustomer.dbscan_cluster}</span>
+                  <span>DBSCAN: {selectedCustomer.dbscan_cluster === -1 ? 'Noise (-1)' : `Cluster ${selectedCustomer.dbscan_cluster}`}</span>
                 </div>
               </div>
             )}
