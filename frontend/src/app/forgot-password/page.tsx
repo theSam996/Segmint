@@ -3,11 +3,14 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Mail, ArrowLeft, CheckCircle2, AlertCircle } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
 
 export default function ForgotPasswordPage() {
+  const { resetPassword } = useAuth();
+
   const [email, setEmail] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -15,15 +18,21 @@ export default function ForgotPasswordPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email) {
+    if (!email.trim()) {
       setError("Please enter your registered email address.");
       return;
     }
     setError(null);
     setIsLoading(true);
-    await new Promise((r) => setTimeout(r, 600));
-    setIsLoading(false);
-    setSubmitted(true);
+
+    try {
+      await resetPassword(email);
+      setSubmitted(true);
+    } catch (err: any) {
+      setError(err.message || "Failed to send reset link. Please verify the email address.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -51,9 +60,9 @@ export default function ForgotPasswordPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             {error && (
-              <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                <span>{error}</span>
+              <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                <span className="leading-relaxed">{error}</span>
               </div>
             )}
 
@@ -65,7 +74,7 @@ export default function ForgotPasswordPage() {
                 <div className="space-y-1">
                   <h4 className="text-sm font-bold text-foreground">Reset Link Sent</h4>
                   <p className="text-xs text-muted-foreground">
-                    Check your inbox at <strong className="text-foreground">{email}</strong> for instructions.
+                    Check your inbox at <strong className="text-foreground">{email}</strong> for password reset instructions.
                   </p>
                 </div>
                 <Button
