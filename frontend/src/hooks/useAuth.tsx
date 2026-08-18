@@ -1,12 +1,22 @@
 "use client";
 
 import { useState, useEffect, createContext, useContext, ReactNode } from "react";
-import { supabase } from "@/lib/supabase";
+import {
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signInWithPopup,
+  signOut,
+  onAuthStateChanged,
+  updateProfile,
+  sendPasswordResetEmail,
+  GoogleAuthProvider,
+  User as FirebaseUser,
+} from "firebase/auth";
+import { auth, browserPopupRedirectResolver } from "@/lib/firebase";
 import { User, Workspace, AuthState } from "@/types/auth";
-import type { User as SupabaseUser } from "@supabase/supabase-js";
 
 export interface AuthContextType extends AuthState {
-  supabaseUser: SupabaseUser | null;
+  firebaseUser: FirebaseUser | null;
   login: (email: string, pass: string) => Promise<boolean>;
   loginWithGoogle: () => Promise<boolean>;
   signup: (fullName: string, email: string, pass: string) => Promise<boolean>;
@@ -23,123 +33,104 @@ const DEFAULT_WORKSPACE: Workspace = {
   membersCount: 4,
 };
 
-// Friendly message translator for Supabase / Auth errors
-export function formatAuthError(error: any): string {
-  const msg = error?.message || (typeof error === "string" ? error : "");
-  if (msg.includes("Unsupported provider") || msg.includes("provider is not enabled") || msg.includes("validation_failed")) {
-    return "Google OAuth provider is not enabled in your Supabase dashboard yet. Please enable Google in Supabase > Authentication > Providers, or use Email / Instant Demo access below.";
+// Friendly message translator for Firebase auth errors
+export function formatFirebaseAuthError(error: any): string {
+  const code = error?.code || "";
+  const msg = error?.message || "";
+
+  switch (code) {
+    case "auth/invalid-email":
+      return "Invalid email address format.";
+    case "auth/user-disabled":
+      return "This account has been disabled. Please contact support.";
+    case "auth/user-not-found":
+      return "No account found with this email. Please check or sign up.";
+    case "auth/wrong-password":
+    case "auth/invalid-credential":
+      return "Invalid email or password. Please verify your credentials.";
+    case "auth/email-already-in-use":
+      return "An account with this email already exists. Please sign in.";
+    case "auth/weak-password":
+      return "Password should be at least 6 characters.";
+    case "auth/popup-closed-by-user":
+      return "Google sign-in popup was closed before completing.";
+    case "auth/popup-blocked":
+      return "Popup was blocked by your browser. Please allow popups for this site.";
+    case "auth/unauthorized-domain":
+      return "Domain not authorized in Firebase. Ensure localhost is in Firebase Console > Authentication > Settings > Authorized domains.";
+    case "auth/operation-not-allowed":
+      return "This provider is not enabled in Firebase Console. Enable it under Authentication > Sign-in method.";
+    case "auth/network-request-failed":
+      return "Network error. Please check your internet connection.";
+    default:
+      if (msg.includes("Database is closing") || msg.includes("closing/hidden") || msg.includes("IndexedDB")) {
+        return "Browser storage was busy. Please try signing in again.";
+      }
+      return msg || "Authentication error occurred. Please try again.";
   }
-  if (msg.includes("Invalid login credentials") || msg.includes("invalid_grant")) {
-    return "Invalid email or password. If you haven't created an account yet, please sign up.";
-  }
-  if (msg.includes("Email not confirmed")) {
-    return "Please verify your email address before logging in, or check your inbox for the confirmation link.";
-  }
-  if (msg.includes("User already registered") || msg.includes("already exists")) {
-    return "An account with this email already exists. Please sign in.";
-  }
-  if (msg.includes("Password should be at least")) {
-    return "Password must be at least 6 characters.";
-  }
-  if (msg.includes("rate limit") || msg.includes("too many requests")) {
-    return "Too many attempts. Please wait a moment and try again.";
-  }
-  if (msg.includes("Database is closing") || msg.includes("IndexedDB")) {
-    return "Browser storage was busy. Please refresh the page and try again.";
-  }
-  return msg || "Authentication error occurred. Please check your credentials.";
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-function mapSupabaseUserToUser(sbUser: SupabaseUser): User {
-  const meta = sbUser.user_metadata || {};
+function mapFirebaseUserToUser(fbUser: FirebaseUser): User {
   return {
-    id: sbUser.id,
-    email: sbUser.email || "",
-    fullName: meta.full_name || meta.name || sbUser.email?.split("@")[0] || "User",
-    avatarUrl: meta.avatar_url || meta.picture || undefined,
+    id: fbUser.uid,
+    email: fbUser.email || "",
+    fullName: fbUser.displayName || fbUser.email?.split("@")[0] || "User",
+    avatarUrl: fbUser.photoURL || undefined,
     role: "owner",
-    createdAt: sbUser.created_at || new Date().toISOString(),
+    createdAt: fbUser.metadata?.creationTime || new Date().toISOString(),
   };
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [supabaseUser, setSupabaseUser] = useState<SupabaseUser | null>(null);
+  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [workspace, setWorkspace] = useState<Workspace | null>(DEFAULT_WORKSPACE);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Initialize and listen to live Supabase Auth session changes
+  // Listen to live Firebase Auth state changes
   useEffect(() => {
-    // 1. Check existing session
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
-      if (session?.user) {
-        setSupabaseUser(session.user);
-        setUser(mapSupabaseUserToUser(session.user));
-      } else {
-        // Check local storage for persistent guest/demo session
-        const stored = typeof window !== "undefined" ? localStorage.getItem("segmentiq_user") : null;
-        if (stored) {
-          try {
-            const parsed = JSON.parse(stored);
-            setUser(parsed);
-          } catch {
-            // ignore
-          }
-        }
-      }
-      setIsLoading(false);
-    }).catch(() => {
-      setIsLoading(false);
-    });
-
-    // 2. Subscribe to auth changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        setSupabaseUser(session.user);
-        const mapped = mapSupabaseUserToUser(session.user);
+    const unsubscribe = onAuthStateChanged(auth, (fbUser) => {
+      if (fbUser) {
+        setFirebaseUser(fbUser);
+        const mapped = mapFirebaseUserToUser(fbUser);
         setUser(mapped);
         if (typeof window !== "undefined") {
           localStorage.setItem("segmentiq_user", JSON.stringify(mapped));
         }
       } else {
-        setSupabaseUser(null);
+        const stored = typeof window !== "undefined" ? localStorage.getItem("segmentiq_user") : null;
+        if (stored) {
+          try {
+            setUser(JSON.parse(stored));
+          } catch {
+            setUser(null);
+          }
+        } else {
+          setUser(null);
+        }
+        setFirebaseUser(null);
       }
       setIsLoading(false);
     });
 
-    return () => {
-      subscription.unsubscribe();
-    };
+    return () => unsubscribe();
   }, []);
 
   const login = async (email: string, pass: string): Promise<boolean> => {
     setIsLoading(true);
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password: pass,
-      });
-
-      if (error) {
-        throw new Error(formatAuthError(error));
-      }
-
-      if (data.user) {
-        setSupabaseUser(data.user);
-        const mapped = mapSupabaseUserToUser(data.user);
-        setUser(mapped);
-        if (typeof window !== "undefined") {
-          localStorage.setItem("segmentiq_user", JSON.stringify(mapped));
-        }
-        return true;
+      const res = await signInWithEmailAndPassword(auth, email.trim(), pass);
+      setFirebaseUser(res.user);
+      const mapped = mapFirebaseUserToUser(res.user);
+      setUser(mapped);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("segmentiq_user", JSON.stringify(mapped));
       }
       return true;
-    } catch (err: any) {
-      throw new Error(formatAuthError(err));
+    } catch (error: any) {
+      throw new Error(formatFirebaseAuthError(error));
     } finally {
       setIsLoading(false);
     }
@@ -148,24 +139,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loginWithGoogle = async (): Promise<boolean> => {
     setIsLoading(true);
     try {
-      const redirectUrl = typeof window !== "undefined" ? `${window.location.origin}/dashboard` : undefined;
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: redirectUrl,
-          queryParams: {
-            access_type: "offline",
-            prompt: "consent",
-          },
-        },
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({
+        prompt: "select_account",
       });
-
-      if (error) {
-        throw new Error(formatAuthError(error));
+      const res = await signInWithPopup(auth, provider, browserPopupRedirectResolver);
+      setFirebaseUser(res.user);
+      const mapped = mapFirebaseUserToUser(res.user);
+      setUser(mapped);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("segmentiq_user", JSON.stringify(mapped));
       }
       return true;
-    } catch (err: any) {
-      throw new Error(formatAuthError(err));
+    } catch (error: any) {
+      throw new Error(formatFirebaseAuthError(error));
     } finally {
       setIsLoading(false);
     }
@@ -174,32 +161,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signup = async (fullName: string, email: string, pass: string): Promise<boolean> => {
     setIsLoading(true);
     try {
-      const { data, error } = await supabase.auth.signUp({
-        email: email.trim(),
-        password: pass,
-        options: {
-          data: {
-            full_name: fullName.trim(),
-          },
-        },
-      });
-
-      if (error) {
-        throw new Error(formatAuthError(error));
-      }
-
-      if (data.user) {
-        setSupabaseUser(data.user);
-        const mapped = mapSupabaseUserToUser(data.user);
-        setUser(mapped);
-        if (typeof window !== "undefined") {
-          localStorage.setItem("segmentiq_user", JSON.stringify(mapped));
+      const res = await createUserWithEmailAndPassword(auth, email.trim(), pass);
+      if (fullName.trim()) {
+        try {
+          await updateProfile(res.user, { displayName: fullName.trim() });
+        } catch {
+          // ignore
         }
-        return true;
+      }
+      setFirebaseUser(res.user);
+      const mapped = {
+        ...mapFirebaseUserToUser(res.user),
+        fullName: fullName.trim() || res.user.email?.split("@")[0] || "User",
+      };
+      setUser(mapped);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("segmentiq_user", JSON.stringify(mapped));
       }
       return true;
-    } catch (err: any) {
-      throw new Error(formatAuthError(err));
+    } catch (error: any) {
+      throw new Error(formatFirebaseAuthError(error));
     } finally {
       setIsLoading(false);
     }
@@ -207,29 +188,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const resetPassword = async (email: string): Promise<boolean> => {
     try {
-      const redirectUrl = typeof window !== "undefined" ? `${window.location.origin}/settings` : undefined;
-      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-        redirectTo: redirectUrl,
-      });
-      if (error) {
-        throw new Error(formatAuthError(error));
-      }
+      await sendPasswordResetEmail(auth, email.trim());
       return true;
-    } catch (err: any) {
-      throw new Error(formatAuthError(err));
+    } catch (error: any) {
+      throw new Error(formatFirebaseAuthError(error));
     }
   };
 
   const logout = async () => {
     try {
-      await supabase.auth.signOut();
+      await signOut(auth);
     } catch {
       // ignore
     }
     if (typeof window !== "undefined") {
       localStorage.removeItem("segmentiq_user");
     }
-    setSupabaseUser(null);
+    setFirebaseUser(null);
     setUser(null);
   };
 
@@ -250,7 +225,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider
       value={{
-        supabaseUser,
+        firebaseUser,
         user,
         workspace,
         isAuthenticated: !!user,
