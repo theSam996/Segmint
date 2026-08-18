@@ -14,10 +14,12 @@ import {
   Check,
 } from "lucide-react";
 import { useDatasets } from "@/hooks/useDatasets";
+import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 
 export function Topbar() {
+  const { user } = useAuth();
   const { datasets, selectedDataset, setSelectedDataset } = useDatasets();
   const [showDatasetMenu, setShowDatasetMenu] = useState(false);
   const [isDark, setIsDark] = useState(true);
@@ -145,6 +147,22 @@ export function Topbar() {
         >
           <HelpCircle className="w-4 h-4" />
         </Link>
+
+        {/* User Profile Avatar Link */}
+        {user && (
+          <Link
+            href="/settings"
+            title="Profile Settings"
+            className="flex items-center gap-2 pl-2 pr-2.5 py-1 rounded-full bg-secondary/80 border border-border/80 hover:border-primary/50 transition-all text-xs font-semibold text-foreground group"
+          >
+            <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-primary to-purple-400 text-primary-foreground font-black text-[11px] flex items-center justify-center shadow-xs">
+              {user.fullName?.charAt(0).toUpperCase() || "U"}
+            </div>
+            <span className="hidden md:inline group-hover:text-primary transition-colors max-w-[120px] truncate">
+              {user.fullName}
+            </span>
+          </Link>
+        )}
       </div>
     </header>
   );

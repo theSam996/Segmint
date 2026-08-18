@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   User,
   Building,
@@ -24,12 +24,20 @@ import { useAuth } from "@/hooks/useAuth";
 import { INDUSTRIES, WORKSPACE_ROLES } from "@/lib/constants";
 
 export default function SettingsPage() {
-  const { user, workspace } = useAuth();
+  const { user, workspace, updateUserProfile, createWorkspace } = useAuth();
 
   // Profile Form
   const [fullName, setFullName] = useState(user?.fullName || "Alex Morgan");
   const [email, setEmail] = useState(user?.email || "alex.morgan@retailco.com");
   const [savedProfile, setSavedProfile] = useState(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
+
+  // Sync state if user loads after initial mount
+  useEffect(() => {
+    if (user?.fullName) setFullName(user.fullName);
+    if (user?.email) setEmail(user.email);
+  }, [user?.fullName, user?.email]);
 
   // Workspace Form
   const [workspaceName, setWorkspaceName] = useState(workspace?.name || "RetailCo Analytics");
@@ -38,7 +46,7 @@ export default function SettingsPage() {
 
   // Team Members
   const [members, setMembers] = useState([
-    { id: "1", name: "Alex Morgan", email: "alex.morgan@retailco.com", role: "owner" },
+    { id: "1", name: user?.fullName || "Alex Morgan", email: user?.email || "alex.morgan@retailco.com", role: "owner" },
     { id: "2", name: "Sarah Chen", email: "sarah.c@retailco.com", role: "admin" },
     { id: "3", name: "Marcus Vance", email: "m.vance@retailco.com", role: "analyst" },
     { id: "4", name: "Elena Rostova", email: "elena.r@retailco.com", role: "viewer" },
@@ -47,10 +55,21 @@ export default function SettingsPage() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("analyst");
 
-  const handleSaveProfile = (e: React.FormEvent) => {
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSavedProfile(true);
-    setTimeout(() => setSavedProfile(false), 2000);
+    setSavedProfile(false);
+    setProfileError(null);
+    setIsSavingProfile(true);
+
+    try {
+      await updateUserProfile(fullName, email);
+      setSavedProfile(true);
+      setTimeout(() => setSavedProfile(false), 3000);
+    } catch (err: any) {
+      setProfileError(err.message || "Failed to update profile.");
+    } finally {
+      setIsSavingProfile(false);
+    }
   };
 
   const handleSaveWorkspace = (e: React.FormEvent) => {
@@ -140,13 +159,25 @@ export default function SettingsPage() {
                   />
                 </div>
 
+                {profileError && (
+                  <p className="text-xs font-semibold text-rose-400">
+                    {profileError}
+                  </p>
+                )}
+
                 <div className="flex items-center justify-between pt-2">
                   {savedProfile && (
                     <span className="text-xs font-semibold text-emerald-400 flex items-center gap-1">
                       <CheckCircle2 className="w-4 h-4" /> Profile updated successfully
                     </span>
                   )}
-                  <Button type="submit" size="sm" variant="primary" className="ml-auto text-xs h-8">
+                  <Button
+                    type="submit"
+                    size="sm"
+                    variant="primary"
+                    isLoading={isSavingProfile}
+                    className="ml-auto text-xs h-8"
+                  >
                     Save Changes
                   </Button>
                 </div>

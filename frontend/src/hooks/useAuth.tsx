@@ -21,6 +21,7 @@ export interface AuthContextType extends AuthState {
   loginWithGoogle: () => Promise<boolean>;
   signup: (fullName: string, email: string, pass: string) => Promise<boolean>;
   resetPassword: (email: string) => Promise<boolean>;
+  updateUserProfile: (fullName: string, email?: string) => Promise<boolean>;
   logout: () => Promise<void>;
   createWorkspace: (name: string, industry: string) => void;
 }
@@ -186,6 +187,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const updateUserProfile = async (fullName: string, newEmail?: string): Promise<boolean> => {
+    setIsLoading(true);
+    try {
+      if (auth.currentUser && fullName.trim()) {
+        await updateProfile(auth.currentUser, { displayName: fullName.trim() });
+      }
+      const updatedUser: User = {
+        ...(user || {
+          id: auth.currentUser?.uid || "usr-01",
+          role: "owner",
+          createdAt: new Date().toISOString(),
+        }),
+        fullName: fullName.trim(),
+        email: newEmail?.trim() || user?.email || auth.currentUser?.email || "",
+      };
+      setUser(updatedUser);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("segmentiq_user", JSON.stringify(updatedUser));
+      }
+      return true;
+    } catch (error: any) {
+      throw new Error(formatFirebaseAuthError(error));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const resetPassword = async (email: string): Promise<boolean> => {
     try {
       await sendPasswordResetEmail(auth, email.trim());
@@ -234,6 +262,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loginWithGoogle,
         signup,
         resetPassword,
+        updateUserProfile,
         logout,
         createWorkspace,
       }}

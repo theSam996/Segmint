@@ -20,7 +20,11 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Card, CardContent } from "@/components/ui/Card";
 
+import { useAuth } from "@/hooks/useAuth";
+
 export default function LandingPage() {
+  const { user, isAuthenticated } = useAuth();
+
   const scrollTo = (id: string) => {
     const el = document.getElementById(id);
     if (el) el.scrollIntoView({ behavior: "smooth" });
@@ -70,16 +74,44 @@ export default function LandingPage() {
           </div>
 
           <div className="flex items-center gap-3">
-            <Link href="/login">
-              <Button variant="ghost" size="sm" className="text-xs">
-                Login
-              </Button>
-            </Link>
-            <Link href="/signup">
-              <Button size="sm" variant="primary" className="text-xs">
-                Start Free <ArrowRight className="w-3.5 h-3.5 ml-1" />
-              </Button>
-            </Link>
+            {isAuthenticated && user ? (
+              <div className="flex items-center gap-3">
+                <Link
+                  href="/settings"
+                  className="flex items-center gap-2.5 px-3 py-1.5 rounded-full bg-card border border-border/80 hover:border-primary/50 transition-all text-left group"
+                >
+                  <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-primary to-purple-400 text-primary-foreground font-black text-[11px] flex items-center justify-center shadow-xs">
+                    {user.fullName?.charAt(0).toUpperCase() || "U"}
+                  </div>
+                  <div className="hidden sm:block text-left">
+                    <span className="text-xs font-bold text-foreground block group-hover:text-primary transition-colors leading-none">
+                      {user.fullName}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground block leading-tight truncate max-w-[140px]">
+                      {user.email}
+                    </span>
+                  </div>
+                </Link>
+                <Link href="/dashboard">
+                  <Button size="sm" variant="primary" className="text-xs font-semibold h-8 shadow-sm">
+                    Go to Dashboard <ArrowRight className="w-3.5 h-3.5 ml-1" />
+                  </Button>
+                </Link>
+              </div>
+            ) : (
+              <>
+                <Link href="/login">
+                  <Button variant="ghost" size="sm" className="text-xs">
+                    Login
+                  </Button>
+                </Link>
+                <Link href="/signup">
+                  <Button size="sm" variant="primary" className="text-xs">
+                    Start Free <ArrowRight className="w-3.5 h-3.5 ml-1" />
+                  </Button>
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </header>
@@ -108,16 +140,26 @@ export default function LandingPage() {
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-4">
-            <Link href="/signup">
-              <Button size="lg" variant="primary" className="w-full sm:w-auto text-sm font-semibold h-11 px-7 shadow-md">
-                Start Free <ArrowRight className="w-4 h-4 ml-1.5" />
-              </Button>
-            </Link>
-            <Link href="/onboarding/setup">
-              <Button size="lg" variant="secondary" className="w-full sm:w-auto text-sm h-11 px-7">
-                Explore Demo Dataset (UCI Retail)
-              </Button>
-            </Link>
+            {isAuthenticated ? (
+              <Link href="/dashboard">
+                <Button size="lg" variant="primary" className="w-full sm:w-auto text-sm font-semibold h-11 px-7 shadow-md">
+                  Go to Dashboard <ArrowRight className="w-4 h-4 ml-1.5" />
+                </Button>
+              </Link>
+            ) : (
+              <>
+                <Link href="/signup">
+                  <Button size="lg" variant="primary" className="w-full sm:w-auto text-sm font-semibold h-11 px-7 shadow-md">
+                    Start Free <ArrowRight className="w-4 h-4 ml-1.5" />
+                  </Button>
+                </Link>
+                <Link href="/onboarding/setup">
+                  <Button size="lg" variant="secondary" className="w-full sm:w-auto text-sm h-11 px-7">
+                    Explore Demo Dataset (UCI Retail)
+                  </Button>
+                </Link>
+              </>
+            )}
           </div>
 
           {/* Product Dashboard Preview */}
