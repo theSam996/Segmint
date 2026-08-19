@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   User,
   Building,
@@ -12,6 +12,9 @@ import {
   Lock,
   Plus,
   Trash2,
+  Camera,
+  Upload,
+  X,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/Tabs";
@@ -22,13 +25,17 @@ import { Badge } from "@/components/ui/Badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/Card";
 import { useAuth } from "@/hooks/useAuth";
 import { INDUSTRIES, WORKSPACE_ROLES } from "@/lib/constants";
+import { uploadAvatarToSupabaseStorage } from "@/lib/supabase";
 
 export default function SettingsPage() {
   const { user, workspace, updateUserProfile, createWorkspace } = useAuth();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Profile Form
   const [fullName, setFullName] = useState(user?.fullName || "Alex Morgan");
   const [email, setEmail] = useState(user?.email || "alex.morgan@retailco.com");
+  const [avatarUrl, setAvatarUrl] = useState<string | undefined>(user?.avatarUrl);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [savedProfile, setSavedProfile] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
@@ -37,7 +44,8 @@ export default function SettingsPage() {
   useEffect(() => {
     if (user?.fullName) setFullName(user.fullName);
     if (user?.email) setEmail(user.email);
-  }, [user?.fullName, user?.email]);
+    if (user?.avatarUrl !== undefined && !selectedFile) setAvatarUrl(user.avatarUrl);
+  }, [user?.fullName, user?.email, user?.avatarUrl, selectedFile]);
 
   // Workspace Form
   const [workspaceName, setWorkspaceName] = useState(workspace?.name || "RetailCo Analytics");
@@ -55,6 +63,27 @@ export default function SettingsPage() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("analyst");
 
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        setProfileError("Image size must be under 5MB.");
+        return;
+      }
+      setSelectedFile(file);
+      setAvatarUrl(URL.createObjectURL(file));
+      setProfileError(null);
+    }
+  };
+
+  const handleRemovePhoto = () => {
+    setSelectedFile(null);
+    setAvatarUrl("");
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     setSavedProfile(false);
@@ -62,7 +91,22 @@ export default function SettingsPage() {
     setIsSavingProfile(true);
 
     try {
-      await updateUserProfile(fullName, email);
+      let finalPhotoUrl = avatarUrl;
+
+      // 1. Upload file to Supabase Storage / public image URL handler if a new photo file was chosen
+      if (selectedFile) {
+        try {
+          finalPhotoUrl = await uploadAvatarToSupabaseStorage(selectedFile, user?.id || "user");
+        } catch (uploadErr: any) {
+          setProfileError(uploadErr.message || "Failed to upload image. Please try again.");
+          setIsSavingProfile(false);
+          return;
+        }
+      }
+
+      // 2. Save public image URL in Auth profile & user state (never Base64)
+      await updateUserProfile(fullName, email, finalPhotoUrl);
+      setSelectedFile(null);
       setSavedProfile(true);
       setTimeout(() => setSavedProfile(false), 3000);
     } catch (err: any) {
@@ -122,21 +166,76 @@ export default function SettingsPage() {
                 <User className="w-4 h-4 text-primary" /> Personal Profile
               </CardTitle>
               <CardDescription className="text-xs">
-                Update your contact details and display preferences.
+                Update your avatar photo, contact details, and display preferences.
               </CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSaveProfile} className="space-y-4 text-xs">
-                <div className="flex items-center gap-4 pb-2 border-b border-border/40">
-                  <div className="w-14 h-14 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center text-lg font-black text-primary">
-                    {fullName.charAt(0)}
+                {/* Hidden File Input */}
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  accept="image/*"
+                  onChange={handlePhotoUpload}
+                  className="hidden"
+                />
+
+                {/* Avatar Uploader Section */}
+                <div className="flex flex-col sm:flex-row items-center gap-5 pb-4 border-b border-border/40">
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    className="relative w-20 h-20 rounded-full bg-gradient-to-tr from-primary/20 to-purple-500/20 border-2 border-primary/40 flex items-center justify-center text-2xl font-black text-primary cursor-pointer group overflow-hidden shadow-md hover:border-primary transition-all flex-shrink-0"
+                    title="Click to upload profile photo"
+                  >
+                    {avatarUrl ? (
+                      <img
+                        src={avatarUrl}
+                        alt={fullName}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <span>{fullName.charAt(0).toUpperCase()}</span>
+                    )}
+
+                    {/* Hover Camera Overlay */}
+                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center transition-opacity text-white">
+                      <Camera className="w-5 h-5 mb-0.5" />
+                      <span className="text-[9px] font-semibold uppercase tracking-wider">
+                        Upload
+                      </span>
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="font-bold text-foreground">{fullName}</h4>
-                    <p className="text-muted-foreground">{email}</p>
-                    <Badge variant="purple" className="text-[10px] mt-1">
-                      Workspace Owner
-                    </Badge>
+
+                  <div className="space-y-1.5 text-center sm:text-left flex-1">
+                    <h4 className="font-bold text-foreground text-sm flex items-center gap-2 justify-center sm:justify-start">
+                      {fullName}
+                      <Badge variant="purple" className="text-[10px]">
+                        Workspace Owner
+                      </Badge>
+                    </h4>
+                    <p className="text-muted-foreground text-xs">{email}</p>
+                    <div className="flex items-center gap-2 pt-1 justify-center sm:justify-start">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="text-[11px] h-7 px-3 border-border/80"
+                      >
+                        <Upload className="w-3 h-3 mr-1.5" /> Change Photo
+                      </Button>
+                      {avatarUrl && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleRemovePhoto}
+                          className="text-[11px] h-7 px-2.5 text-rose-400 hover:text-rose-300 hover:bg-rose-500/10"
+                        >
+                          <X className="w-3 h-3 mr-1" /> Remove
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </div>
 

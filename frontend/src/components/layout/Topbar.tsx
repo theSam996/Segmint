@@ -155,8 +155,12 @@ export function Topbar() {
             title="Profile Settings"
             className="flex items-center gap-2 pl-2 pr-2.5 py-1 rounded-full bg-secondary/80 border border-border/80 hover:border-primary/50 transition-all text-xs font-semibold text-foreground group"
           >
-            <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-primary to-purple-400 text-primary-foreground font-black text-[11px] flex items-center justify-center shadow-xs">
-              {user.fullName?.charAt(0).toUpperCase() || "U"}
+            <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-primary to-purple-400 text-primary-foreground font-black text-[11px] flex items-center justify-center shadow-xs overflow-hidden">
+              {user.avatarUrl ? (
+                <img src={user.avatarUrl} alt={user.fullName || "User"} className="w-full h-full object-cover" />
+              ) : (
+                <span>{user.fullName?.charAt(0).toUpperCase() || "U"}</span>
+              )}
             </div>
             <span className="hidden md:inline group-hover:text-primary transition-colors max-w-[120px] truncate">
               {user.fullName}

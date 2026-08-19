@@ -1,13 +1,6 @@
 {
-  "/page": "app/page.js",
-  "/login/page": "app/login/page.js",
+  "/customers/page": "app/customers/page.js",
   "/dashboard/page": "app/dashboard/page.js",
   "/settings/page": "app/settings/page.js",
-  "/datasets/page": "app/datasets/page.js",
-  "/segments/page": "app/segments/page.js",
-  "/recommendations/page": "app/recommendations/page.js",
-  "/analytics/page": "app/analytics/page.js",
-  "/models/page": "app/models/page.js",
-  "/customers/page": "app/customers/page.js",
-  "/customers/[customerId]/page": "app/customers/[customerId]/page.js"
+  "/datasets/new/page": "app/datasets/new/page.js"
 }

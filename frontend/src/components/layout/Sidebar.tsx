@@ -153,8 +153,12 @@ export function Sidebar({ className }: { className?: string }) {
       <div className="p-3 border-t border-border/60 bg-muted/20">
         <div className="flex items-center justify-between p-2 rounded-lg hover:bg-accent/50 transition-colors">
           <Link href="/settings" className="flex items-center gap-2.5 overflow-hidden flex-1 group">
-            <div className="w-8 h-8 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center text-xs font-bold text-primary flex-shrink-0 group-hover:border-primary">
-              {user?.fullName?.charAt(0) || "U"}
+            <div className="w-8 h-8 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center text-xs font-bold text-primary flex-shrink-0 group-hover:border-primary overflow-hidden">
+              {user?.avatarUrl ? (
+                <img src={user.avatarUrl} alt={user.fullName || "User"} className="w-full h-full object-cover" />
+              ) : (
+                <span>{user?.fullName?.charAt(0).toUpperCase() || "U"}</span>
+              )}
             </div>
             <div className="truncate text-left">
               <p className="text-xs font-semibold text-foreground truncate group-hover:text-primary transition-colors">

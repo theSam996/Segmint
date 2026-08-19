@@ -21,7 +21,7 @@ export interface AuthContextType extends AuthState {
   loginWithGoogle: () => Promise<boolean>;
   signup: (fullName: string, email: string, pass: string) => Promise<boolean>;
   resetPassword: (email: string) => Promise<boolean>;
-  updateUserProfile: (fullName: string, email?: string) => Promise<boolean>;
+  updateUserProfile: (fullName: string, email?: string, avatarUrl?: string) => Promise<boolean>;
   logout: () => Promise<void>;
   createWorkspace: (name: string, industry: string) => void;
 }
@@ -187,11 +187,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const updateUserProfile = async (fullName: string, newEmail?: string): Promise<boolean> => {
+  const updateUserProfile = async (
+    fullName: string,
+    newEmail?: string,
+    avatarUrl?: string
+  ): Promise<boolean> => {
     setIsLoading(true);
     try {
-      if (auth.currentUser && fullName.trim()) {
-        await updateProfile(auth.currentUser, { displayName: fullName.trim() });
+      if (auth.currentUser) {
+        // Strip out Base64 strings or URLs over 2000 chars to avoid Firebase "Photo URL too long" error
+        const isTooLongOrBase64 = (url?: string) => !url || url.startsWith("data:") || url.length > 2000;
+        
+        let safePhotoUrl: string | undefined = undefined;
+        if (avatarUrl !== undefined) {
+          safePhotoUrl = isTooLongOrBase64(avatarUrl) ? undefined : avatarUrl;
+        } else if (user?.avatarUrl) {
+          safePhotoUrl = isTooLongOrBase64(user.avatarUrl) ? undefined : user.avatarUrl;
+        }
+
+        await updateProfile(auth.currentUser, {
+          displayName: fullName.trim() || undefined,
+          photoURL: safePhotoUrl,
+        });
       }
       const updatedUser: User = {
         ...(user || {
@@ -201,6 +218,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }),
         fullName: fullName.trim(),
         email: newEmail?.trim() || user?.email || auth.currentUser?.email || "",
+        avatarUrl: avatarUrl !== undefined ? avatarUrl : user?.avatarUrl,
       };
       setUser(updatedUser);
       if (typeof window !== "undefined") {

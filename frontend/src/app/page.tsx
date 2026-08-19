@@ -80,8 +80,12 @@ export default function LandingPage() {
                   href="/settings"
                   className="flex items-center gap-2.5 px-3 py-1.5 rounded-full bg-card border border-border/80 hover:border-primary/50 transition-all text-left group"
                 >
-                  <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-primary to-purple-400 text-primary-foreground font-black text-[11px] flex items-center justify-center shadow-xs">
-                    {user.fullName?.charAt(0).toUpperCase() || "U"}
+                  <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-primary to-purple-400 text-primary-foreground font-black text-[11px] flex items-center justify-center shadow-xs overflow-hidden">
+                    {user.avatarUrl ? (
+                      <img src={user.avatarUrl} alt={user.fullName || "User"} className="w-full h-full object-cover" />
+                    ) : (
+                      <span>{user.fullName?.charAt(0).toUpperCase() || "U"}</span>
+                    )}
                   </div>
                   <div className="hidden sm:block text-left">
                     <span className="text-xs font-bold text-foreground block group-hover:text-primary transition-colors leading-none">
