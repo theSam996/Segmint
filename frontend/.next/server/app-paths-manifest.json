@@ -1,6 +1,8 @@
 {
-  "/customers/page": "app/customers/page.js",
   "/dashboard/page": "app/dashboard/page.js",
   "/settings/page": "app/settings/page.js",
-  "/datasets/new/page": "app/datasets/new/page.js"
+  "/page": "app/page.js",
+  "/datasets/new/page": "app/datasets/new/page.js",
+  "/customers/page": "app/customers/page.js",
+  "/datasets/new/validate/page": "app/datasets/new/validate/page.js"
 }
