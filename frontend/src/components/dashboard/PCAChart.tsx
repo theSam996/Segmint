@@ -13,9 +13,10 @@ import {
 } from "recharts";
 import { PCAPoint } from "@/types/analytics";
 import { formatCurrency, formatDays, formatNumber } from "@/lib/utils";
+import { MOCK_PCA_DATA } from "@/lib/mock-data/analytics";
 
 interface PCAChartProps {
-  points: PCAPoint[];
+  points?: PCAPoint[];
   explainedVarianceRatio?: [number, number];
   totalExplainedVariance?: number;
 }
@@ -27,13 +28,15 @@ export function PCAChart({
 }: PCAChartProps) {
   const [algorithm, setAlgorithm] = useState<"kmeans" | "dbscan">("kmeans");
 
-  // Group data by cluster for color-coded rendering
-  const kMeansGroup1 = points.filter((p) => p.kmeansCluster === 1);
-  const kMeansGroup0 = points.filter((p) => p.kmeansCluster === 0);
-  const kMeansGroup2 = points.filter((p) => p.kmeansCluster === 2);
+  const safePoints = points && points.length > 0 ? points : MOCK_PCA_DATA.points;
 
-  const dbscanCore = points.filter((p) => p.dbscanCluster !== -1);
-  const dbscanNoise = points.filter((p) => p.dbscanCluster === -1);
+  // Group data by cluster for color-coded rendering
+  const kMeansGroup1 = safePoints.filter((p) => p.kmeansCluster === 1);
+  const kMeansGroup0 = safePoints.filter((p) => p.kmeansCluster === 0);
+  const kMeansGroup2 = safePoints.filter((p) => p.kmeansCluster === 2);
+
+  const dbscanCore = safePoints.filter((p) => p.dbscanCluster !== -1);
+  const dbscanNoise = safePoints.filter((p) => p.dbscanCluster === -1);
 
   return (
     <div className="space-y-4">
@@ -147,17 +150,21 @@ export function PCAChart({
               }}
             />
 
-            {algorithm === "kmeans" ? (
-              <>
-                <Scatter name="Loyal High Spenders" data={kMeansGroup1} fill="#3b82f6" />
-                <Scatter name="At-Risk Customers" data={kMeansGroup0} fill="#f59e0b" />
-                <Scatter name="Hibernating Accounts" data={kMeansGroup2} fill="#6b7280" />
-              </>
-            ) : (
-              <>
-                <Scatter name="Core Density Clusters" data={dbscanCore} fill="#8b5cf6" />
-                <Scatter name="Noise / Outliers (-1)" data={dbscanNoise} fill="#ef4444" shape="cross" />
-              </>
+            {algorithm === "kmeans" && (
+              <Scatter name="Loyal High Spenders" data={kMeansGroup1} fill="#3b82f6" />
+            )}
+            {algorithm === "kmeans" && (
+              <Scatter name="At-Risk Customers" data={kMeansGroup0} fill="#f59e0b" />
+            )}
+            {algorithm === "kmeans" && (
+              <Scatter name="Hibernating Accounts" data={kMeansGroup2} fill="#9ca3af" />
+            )}
+
+            {algorithm === "dbscan" && (
+              <Scatter name="Core Density Clusters" data={dbscanCore} fill="#8b5cf6" />
+            )}
+            {algorithm === "dbscan" && (
+              <Scatter name="Noise / Outliers (-1)" data={dbscanNoise} fill="#ef4444" shape="cross" />
             )}
           </ScatterChart>
         </ResponsiveContainer>
