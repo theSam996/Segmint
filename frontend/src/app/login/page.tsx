@@ -27,7 +27,8 @@ export default function LoginPage() {
 
     try {
       await login(email, password);
-      router.push("/dashboard");
+      const hasOnboarded = typeof window !== "undefined" && localStorage.getItem("segmentiq_onboarded") === "true";
+      router.push(hasOnboarded ? "/dashboard" : "/onboarding");
     } catch (err: any) {
       setError(err.message || "Failed to sign in. Please verify your credentials.");
     }
@@ -37,7 +38,8 @@ export default function LoginPage() {
     setError(null);
     try {
       await loginWithGoogle();
-      router.push("/dashboard");
+      const hasOnboarded = typeof window !== "undefined" && localStorage.getItem("segmentiq_onboarded") === "true";
+      router.push(hasOnboarded ? "/dashboard" : "/onboarding");
     } catch (err: any) {
       setError(err.message || "Google authentication was cancelled or failed.");
     }
@@ -56,7 +58,8 @@ export default function LoginPage() {
         })
       );
     }
-    router.push("/dashboard");
+    const hasOnboarded = typeof window !== "undefined" && localStorage.getItem("segmentiq_onboarded") === "true";
+    router.push(hasOnboarded ? "/dashboard" : "/onboarding");
   };
 
   return (

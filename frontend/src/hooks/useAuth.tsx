@@ -17,6 +17,7 @@ import { User, Workspace, AuthState } from "@/types/auth";
 
 export interface AuthContextType extends AuthState {
   firebaseUser: FirebaseUser | null;
+  hasCompletedOnboarding: boolean;
   login: (email: string, pass: string) => Promise<boolean>;
   loginWithGoogle: () => Promise<boolean>;
   signup: (fullName: string, email: string, pass: string) => Promise<boolean>;
@@ -24,6 +25,7 @@ export interface AuthContextType extends AuthState {
   updateUserProfile: (fullName: string, email?: string, avatarUrl?: string) => Promise<boolean>;
   logout: () => Promise<void>;
   createWorkspace: (name: string, industry: string) => void;
+  completeOnboarding: () => void;
 }
 
 const DEFAULT_WORKSPACE: Workspace = {
@@ -88,7 +90,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [workspace, setWorkspace] = useState<Workspace | null>(DEFAULT_WORKSPACE);
+  const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState<boolean>(true);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Sync workspace and onboarding state from localStorage
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const onboarded = localStorage.getItem("segmentiq_onboarded");
+      if (onboarded !== null) {
+        setHasCompletedOnboarding(onboarded === "true");
+      }
+      const storedWs = localStorage.getItem("segmentiq_workspace");
+      if (storedWs) {
+        try {
+          setWorkspace(JSON.parse(storedWs));
+        } catch {
+          // ignore
+        }
+      }
+    }
+  }, []);
 
   // Listen to live Firebase Auth state changes
   useEffect(() => {
@@ -268,6 +289,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const completeOnboarding = () => {
+    setHasCompletedOnboarding(true);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("segmentiq_onboarded", "true");
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -276,6 +304,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         workspace,
         isAuthenticated: !!user,
         isLoading,
+        hasCompletedOnboarding,
         login,
         loginWithGoogle,
         signup,
@@ -283,6 +312,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         updateUserProfile,
         logout,
         createWorkspace,
+        completeOnboarding,
       }}
     >
       {children}

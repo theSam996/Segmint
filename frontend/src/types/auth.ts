@@ -22,4 +22,5 @@ export interface AuthState {
   workspace: Workspace | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  hasCompletedOnboarding?: boolean;
 }
